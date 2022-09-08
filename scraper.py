@@ -1,84 +1,84 @@
-import sys
-from asyncio import get_event_loop, set_event_loop, new_event_loop, ensure_future
-import get
-import utils
-import tokens
-from errors import NoMoreTweetsException, TokenExpiryException
-import output
+import time
 
-bearer = 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs' \
-         '%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA'
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+from constants import *
 
 
-class Scraper:
-    def __init__(self, config):
-        self.config = config
-        self.count = 0
-        self.feed = [-1]
-        self.init = -1
-        self.token = tokens.Token(config)
-        self.token.refresh()
-        self.config.Bearer_token = bearer
+def initialize_driver():
+    browser = webdriver.Chrome()
+    browser.maximize_window()
+    wait = WebDriverWait(browser, 30)
+    return browser, wait
 
-    async def main(self):
-        task = ensure_future(self.run())
-        await task
 
-    async def Feed(self):
-        while True:
-            try:
-                response = await get.RequestUrl(self.config, self.init)
-            except TokenExpiryException as e:
-                self.token.refresh()
-                response = await get.RequestUrl(self.config, self.init)
+def login_twitter(browser, wait):
+    browser.get("https://twitter.com/login")
+    print("waiting for the browser to load...")
+    time.sleep(5)
+    print("starting...")
 
-            self.feed = []
-            try:
-                try:
-                    self.feed, self.init = utils.parse_tweets(
-                        self.config, response)
-                except NoMoreTweetsException as e:
-                    print(f'{e} -- Stopping scrapping...')
-                    break
-                break
-            except TimeoutError as e:
-                print(e)
-                break
-            except Exception as e:
-                print(e)
-        pass
+    email_input = wait.until(
+        EC.visibility_of_element_located((By.NAME, "text")))
+    email_input.send_keys('razudira282@gmail.com')
 
-    async def tweets(self):
-        await self.Feed()
-        for tweet in self.feed:
-            self.count += 1
-            await output.Tweets(tweet, self.config)
+    next_button = wait.until(EC.visibility_of_element_located(
+        (By.XPATH, "//span[text()='Next']")))
+    next_button.click()
 
-    async def run(self):
-        self.user_agent = await get.UserAgent()
+    time.sleep(2)
 
-        while True:
-            if len(self.feed) > 0:
-                await self.tweets()
-            else:
-                break
+    uname_input = wait.until(
+        EC.visibility_of_element_located((By.NAME, "text")))
+    uname_input.send_keys('benibokenda')
 
-            if get.Limit(self.config.Limit, self.count):
-                break
+    next_button = wait.until(EC.visibility_of_element_located(
+        (By.XPATH, "//span[text()='Next']")))
+    next_button.click()
 
+    password_input = wait.until(
+        EC.visibility_of_element_located((By.NAME, "password")))
+    password_input.send_keys('bethecoolguyya')
+
+    login_button = wait.until(EC.visibility_of_element_located(
+        (By.XPATH, "//span[text()='Log in']")))
+    login_button.click()
+
+    time.sleep(5)
+
+
+def search(browser, username):
+    # go to the user profile page
+    base_url = u'https://twitter.com'
+    url = f'{base_url}/{username}'
+
+    browser.get(url)
+    time.sleep(1)
+
+    body = browser.find_element(By.TAG_NAME, 'body')
+
+    while True:
+        body.send_keys(Keys.PAGE_DOWN)
+
+        tweet_contents = browser.find_elements(By.XPATH, TWEET_CONTENT_TEXT)
         print(
-            f"Finished scraping {self.count} tweets from username {self.config.Username}")
+            f'number of tweet content containers found: {len(tweet_contents)}')
+        for t in tweet_contents:
+            print(f'<[[tweet]]: {t.text}>')
+
+        tweet_unames = browser.find_elements(By.XPATH, TWEET_USERNAME_TEXT)
+        print(f'number of tweet uname found: {len(tweet_unames)}')
+        for t in tweet_unames:
+            print(f'<[[posted by user]]: {t.text}>')
+
+        time.sleep(2)
 
 
-def Search(config):
-    try:
-        get_event_loop()
-    except RuntimeError as e:
-        if "no current event loop" in str(e):
-            set_event_loop(new_event_loop())
-        else:
-            raise
-    except Exception as e:
-        sys.exit(0)
-
-    get_event_loop().run_until_complete(Scraper(config).main())
+def run(config):
+    browser, wait = initialize_driver()
+    login_twitter(browser, wait)
+    search(browser, config.Username)
