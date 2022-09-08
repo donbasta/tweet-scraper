@@ -6,6 +6,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
+from selenium.common.exceptions import StaleElementReferenceException
+
 from constants import *
 from utils import process_container
 
@@ -68,24 +70,28 @@ def search(browser, username):
         tweet_containers = browser.find_elements(
             By.XPATH, TWEET_CONTAINER)
         for t in tweet_containers:
-            content = t.find_element(
-                By.XPATH, ".//div[@data-testid='tweetText']")
-            tweet_content = process_container(content)
+            try:
+                content = t.find_element(
+                    By.XPATH, ".//div[@data-testid='tweetText']")
+                tweet_content = process_container(content)
 
-            user = t.find_element(
-                By.XPATH, ".//div[@data-testid='User-Names']")
-            username_element = user.find_element(
-                By.XPATH, ".//div[2]/div/div/a/div/span")
+                user = t.find_element(
+                    By.XPATH, ".//div[@data-testid='User-Names']")
+                username_element = user.find_element(
+                    By.XPATH, ".//div[2]/div/div/a/div/span")
 
-            uname = username_element.text
-            # if uname != username:
-            #     continue
+                uname = username_element.text
+                # if uname != username:
+                #     continue
 
-            ts_element = t.find_element(
-                By.XPATH, ".//div[2]/div/div[3]/a/time")
-            ts = ts_element.text
+                ts_element = t.find_element(
+                    By.XPATH, ".//div[2]/div/div[3]/a/time")
+                ts = ts_element.text
 
-            print(f'<{uname} ({ts})>: {tweet_content}\n')
+                print(f'<{uname} ({ts})>: {tweet_content}\n')
+
+            except StaleElementReferenceException as e:
+                print(e)
 
         time.sleep(5)
 
