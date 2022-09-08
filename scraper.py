@@ -1,84 +1,143 @@
-import sys
-from asyncio import get_event_loop, set_event_loop, new_event_loop, ensure_future
-import get
-import utils
-import tokens
-from errors import NoMoreTweetsException, TokenExpiryException
-import output
+import time
 
-bearer = 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs' \
-         '%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA'
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+from selenium.common.exceptions import StaleElementReferenceException
+
+from constants import *
+
+TWEET_HASHES = dict()
 
 
-class Scraper:
-    def __init__(self, config):
-        self.config = config
-        self.count = 0
-        self.feed = [-1]
-        self.init = -1
-        self.token = tokens.Token(config)
-        self.token.refresh()
-        self.config.Bearer_token = bearer
+def get_browser_options():
+    options = webdriver.ChromeOptions()
+    options.add_argument("--ignore-certificate-errors")
+    options.add_argument("--incognito")
+    options.add_argument("headless")
+    return options
 
-    async def main(self):
-        task = ensure_future(self.run())
-        await task
 
-    async def Feed(self):
-        while True:
+def initialize_driver():
+    opt = get_browser_options()
+    browser = webdriver.Chrome(chrome_options=opt)
+    browser.maximize_window()
+    wait = WebDriverWait(browser, 30)
+    return browser, wait
+
+
+def login_twitter(browser, wait):
+    browser.get("https://twitter.com/login")
+    print("waiting for the browser to load...")
+    time.sleep(5)
+    print("starting...")
+
+    email_input = wait.until(
+        EC.visibility_of_element_located((By.NAME, "text")))
+    email_input.send_keys(TWITTER_LOGIN_EMAIL)
+
+    next_button = wait.until(EC.visibility_of_element_located(
+        (By.XPATH, "//span[text()='Next']")))
+    next_button.click()
+
+    time.sleep(2)
+
+    uname_input = wait.until(
+        EC.visibility_of_element_located((By.NAME, "text")))
+    uname_input.send_keys(TWITTER_LOGIN_USERNAME)
+
+    next_button = wait.until(EC.visibility_of_element_located(
+        (By.XPATH, "//span[text()='Next']")))
+    next_button.click()
+
+    password_input = wait.until(
+        EC.visibility_of_element_located((By.NAME, "password")))
+    password_input.send_keys(TWITTER_LOGIN_PASSWORD)
+
+    login_button = wait.until(EC.visibility_of_element_located(
+        (By.XPATH, "//span[text()='Log in']")))
+    login_button.click()
+
+    time.sleep(5)
+
+
+def process_container(tweet_container):
+    children = tweet_container.find_elements(By.XPATH, ".//*")
+    tweet_tokens = []
+    for c in children:
+        if c.tag_name == "span":
+            tweet_tokens.append(c.text)
+        # elif c.tag_name == "div":
+        #     link = c.find_elements(By.XPATH, ".//span/a")
+        #     print(len(link))
+        #     tweet_text.append(link[0].text)
+    return "".join(tweet_tokens)
+
+
+def search(browser, username):
+    base_url = u'https://twitter.com'
+    url = f'{base_url}/{username}'
+
+    browser.get(url)
+    time.sleep(2)
+
+    scroll_pause_time = 3
+    screen_height = browser.execute_script("return window.screen.height;")
+    i = 1
+
+    while True:
+        browser.execute_script(
+            f"window.scrollTo(0, {screen_height}*{i});")
+        i += 1
+        time.sleep(scroll_pause_time)
+        scroll_height = browser.execute_script(
+            "return document.body.scrollHeight;")
+
+        tweet_containers = browser.find_elements(
+            By.XPATH, TWEET_CONTAINER)
+
+        for t in tweet_containers:
             try:
-                response = await get.RequestUrl(self.config, self.init)
-            except TokenExpiryException as e:
-                self.token.refresh()
-                response = await get.RequestUrl(self.config, self.init)
+                # Getting the text (content) of the tweet
+                content = t.find_element(
+                    By.XPATH, ".//div[@data-testid='tweetText']")
+                tweet_content = process_container(content)
 
-            self.feed = []
-            try:
-                try:
-                    self.feed, self.init = utils.parse_tweets(
-                        self.config, response)
-                except NoMoreTweetsException as e:
-                    print(f'{e} -- Stopping scrapping...')
-                    break
-                break
-            except TimeoutError as e:
+                # Checking if parsed tweet is already processed and outputted to the console or not
+                h = hash(tweet_content)
+                if h in TWEET_HASHES:
+                    continue
+
+                TWEET_HASHES[h] = True
+
+                # Finding the username of the tweeter
+                user = t.find_element(
+                    By.XPATH, ".//div[@data-testid='User-Names']")
+                username_element = user.find_element(
+                    By.XPATH, ".//div[2]/div/div/a/div/span")
+                uname = username_element.text
+
+                # Finding the time of the tweet
+                ts_element = t.find_element(
+                    By.XPATH, ".//div[2]/div/div[3]/a/time")
+                ts = ts_element.text
+
+                # Outputting the formatted tweet to the console
+                print(f'<{uname} ({ts})>: {tweet_content}\n')
+                print(f"{len(TWEET_HASHES)} tweets scraped")
+
+            except StaleElementReferenceException as e:
                 print(e)
-                break
-            except Exception as e:
-                print(e)
-        pass
 
-    async def tweets(self):
-        await self.Feed()
-        for tweet in self.feed:
-            self.count += 1
-            await output.Tweets(tweet, self.config)
-
-    async def run(self):
-        self.user_agent = await get.UserAgent()
-
-        while True:
-            if len(self.feed) > 0:
-                await self.tweets()
-            else:
-                break
-
-            if get.Limit(self.config.Limit, self.count):
-                break
-
-        print(
-            f"Finished scraping {self.count} tweets from username {self.config.Username}")
+        # Finish scrolling if we reach the bottom of the page
+        if (screen_height) * i > scroll_height:
+            break
 
 
-def Search(config):
-    try:
-        get_event_loop()
-    except RuntimeError as e:
-        if "no current event loop" in str(e):
-            set_event_loop(new_event_loop())
-        else:
-            raise
-    except Exception as e:
-        sys.exit(0)
-
-    get_event_loop().run_until_complete(Scraper(config).main())
+def run(config):
+    browser, wait = initialize_driver()
+    login_twitter(browser, wait)
+    search(browser, config.Username)
