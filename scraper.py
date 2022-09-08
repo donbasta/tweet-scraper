@@ -11,9 +11,20 @@ from selenium.common.exceptions import StaleElementReferenceException
 from constants import *
 from utils import process_container
 
+TWEET_HASHES = dict()
+
+
+def get_browser_options():
+    options = webdriver.ChromeOptions()
+    options.add_argument("--ignore-certificate-errors")
+    options.add_argument("--incognito")
+    options.add_argument("headless")
+    return options
+
 
 def initialize_driver():
-    browser = webdriver.Chrome()
+    opt = get_browser_options()
+    browser = webdriver.Chrome(chrome_options=opt)
     browser.maximize_window()
     wait = WebDriverWait(browser, 30)
     return browser, wait
@@ -59,13 +70,24 @@ def search(browser, username):
     url = f'{base_url}/{username}'
 
     browser.get(url)
-    time.sleep(1)
+    time.sleep(2)
 
-    body = browser.find_element(By.TAG_NAME, 'body')
+    # body = browser.find_element(By.TAG_NAME, 'body')
 
-    ts = "1h"
+    scroll_pause_time = 3
+    screen_height = browser.execute_script("return window.screen.height;")
+    # print(f"screen_height: {screen_height}")
+    i = 1
+
     while True:
-        body.send_keys(Keys.PAGE_DOWN)
+        # body.send_keys(Keys.PAGE_DOWN)
+        browser.execute_script(
+            f"window.scrollTo(0, {screen_height}*{i});")
+        i += 1
+        time.sleep(scroll_pause_time)
+        scroll_height = browser.execute_script(
+            "return document.body.scrollHeight;")
+        # print(f"scroll_height: {scroll_height}")
 
         tweet_containers = browser.find_elements(
             By.XPATH, TWEET_CONTAINER)
@@ -74,6 +96,12 @@ def search(browser, username):
                 content = t.find_element(
                     By.XPATH, ".//div[@data-testid='tweetText']")
                 tweet_content = process_container(content)
+
+                h = hash(tweet_content)
+                if h in TWEET_HASHES:
+                    continue
+
+                TWEET_HASHES[h] = True
 
                 user = t.find_element(
                     By.XPATH, ".//div[@data-testid='User-Names']")
@@ -93,7 +121,8 @@ def search(browser, username):
             except StaleElementReferenceException as e:
                 print(e)
 
-        time.sleep(5)
+        if (screen_height) * i > scroll_height:
+            break
 
 
 def run(config):
