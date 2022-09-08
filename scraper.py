@@ -9,7 +9,6 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import StaleElementReferenceException
 
 from constants import *
-from utils import process_container
 
 TWEET_HASHES = dict()
 
@@ -38,7 +37,7 @@ def login_twitter(browser, wait):
 
     email_input = wait.until(
         EC.visibility_of_element_located((By.NAME, "text")))
-    email_input.send_keys('razudira282@gmail.com')
+    email_input.send_keys(TWITTER_LOGIN_EMAIL)
 
     next_button = wait.until(EC.visibility_of_element_located(
         (By.XPATH, "//span[text()='Next']")))
@@ -48,7 +47,7 @@ def login_twitter(browser, wait):
 
     uname_input = wait.until(
         EC.visibility_of_element_located((By.NAME, "text")))
-    uname_input.send_keys('benibokenda')
+    uname_input.send_keys(TWITTER_LOGIN_USERNAME)
 
     next_button = wait.until(EC.visibility_of_element_located(
         (By.XPATH, "//span[text()='Next']")))
@@ -56,13 +55,26 @@ def login_twitter(browser, wait):
 
     password_input = wait.until(
         EC.visibility_of_element_located((By.NAME, "password")))
-    password_input.send_keys('bethecoolguyya')
+    password_input.send_keys(TWITTER_LOGIN_PASSWORD)
 
     login_button = wait.until(EC.visibility_of_element_located(
         (By.XPATH, "//span[text()='Log in']")))
     login_button.click()
 
     time.sleep(5)
+
+
+def process_container(tweet_container):
+    children = tweet_container.find_elements(By.XPATH, ".//*")
+    tweet_tokens = []
+    for c in children:
+        if c.tag_name == "span":
+            tweet_tokens.append(c.text)
+        # elif c.tag_name == "div":
+        #     link = c.find_elements(By.XPATH, ".//span/a")
+        #     print(len(link))
+        #     tweet_text.append(link[0].text)
+    return "".join(tweet_tokens)
 
 
 def search(browser, username):
@@ -72,55 +84,55 @@ def search(browser, username):
     browser.get(url)
     time.sleep(2)
 
-    # body = browser.find_element(By.TAG_NAME, 'body')
-
     scroll_pause_time = 3
     screen_height = browser.execute_script("return window.screen.height;")
-    # print(f"screen_height: {screen_height}")
     i = 1
 
     while True:
-        # body.send_keys(Keys.PAGE_DOWN)
         browser.execute_script(
             f"window.scrollTo(0, {screen_height}*{i});")
         i += 1
         time.sleep(scroll_pause_time)
         scroll_height = browser.execute_script(
             "return document.body.scrollHeight;")
-        # print(f"scroll_height: {scroll_height}")
 
         tweet_containers = browser.find_elements(
             By.XPATH, TWEET_CONTAINER)
+
         for t in tweet_containers:
             try:
+                # Getting the text (content) of the tweet
                 content = t.find_element(
                     By.XPATH, ".//div[@data-testid='tweetText']")
                 tweet_content = process_container(content)
 
+                # Checking if parsed tweet is already processed and outputted to the console or not
                 h = hash(tweet_content)
                 if h in TWEET_HASHES:
                     continue
 
                 TWEET_HASHES[h] = True
 
+                # Finding the username of the tweeter
                 user = t.find_element(
                     By.XPATH, ".//div[@data-testid='User-Names']")
                 username_element = user.find_element(
                     By.XPATH, ".//div[2]/div/div/a/div/span")
-
                 uname = username_element.text
-                # if uname != username:
-                #     continue
 
+                # Finding the time of the tweet
                 ts_element = t.find_element(
                     By.XPATH, ".//div[2]/div/div[3]/a/time")
                 ts = ts_element.text
 
+                # Outputting the formatted tweet to the console
                 print(f'<{uname} ({ts})>: {tweet_content}\n')
+                print(f"{len(TWEET_HASHES)} tweets scraped")
 
             except StaleElementReferenceException as e:
                 print(e)
 
+        # Finish scrolling if we reach the bottom of the page
         if (screen_height) * i > scroll_height:
             break
 
