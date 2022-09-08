@@ -66,14 +66,28 @@ def search(browser, username):
         body.send_keys(Keys.PAGE_DOWN)
 
         tweet_containers = browser.find_elements(
-            By.XPATH, TWEET_CONTENT_CONTAINER)
-        print(
-            f'number of tweet contents found: {len(tweet_containers)}')
+            By.XPATH, TWEET_CONTAINER)
         for t in tweet_containers:
-            tweet_text = process_container(t)
-            print(f'<{username} ({ts})>: {tweet_text}\n')
+            content = t.find_element(
+                By.XPATH, ".//div[@data-testid='tweetText']")
+            tweet_content = process_container(content)
 
-        time.sleep(2)
+            user = t.find_element(
+                By.XPATH, ".//div[@data-testid='User-Names']")
+            username_element = user.find_element(
+                By.XPATH, ".//div[2]/div/div/a/div/span")
+
+            uname = username_element.text
+            # if uname != username:
+            #     continue
+
+            ts_element = t.find_element(
+                By.XPATH, ".//div[2]/div/div[3]/a/time")
+            ts = ts_element.text
+
+            print(f'<{uname} ({ts})>: {tweet_content}\n')
+
+        time.sleep(5)
 
 
 def run(config):
