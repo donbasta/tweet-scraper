@@ -7,6 +7,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 from constants import *
+from utils import process_container
 
 
 def initialize_driver():
@@ -52,7 +53,6 @@ def login_twitter(browser, wait):
 
 
 def search(browser, username):
-    # go to the user profile page
     base_url = u'https://twitter.com'
     url = f'{base_url}/{username}'
 
@@ -61,19 +61,17 @@ def search(browser, username):
 
     body = browser.find_element(By.TAG_NAME, 'body')
 
+    ts = "1h"
     while True:
         body.send_keys(Keys.PAGE_DOWN)
 
-        tweet_contents = browser.find_elements(By.XPATH, TWEET_CONTENT_TEXT)
+        tweet_containers = browser.find_elements(
+            By.XPATH, TWEET_CONTENT_CONTAINER)
         print(
-            f'number of tweet content containers found: {len(tweet_contents)}')
-        for t in tweet_contents:
-            print(f'<[[tweet]]: {t.text}>')
-
-        tweet_unames = browser.find_elements(By.XPATH, TWEET_USERNAME_TEXT)
-        print(f'number of tweet uname found: {len(tweet_unames)}')
-        for t in tweet_unames:
-            print(f'<[[posted by user]]: {t.text}>')
+            f'number of tweet contents found: {len(tweet_containers)}')
+        for t in tweet_containers:
+            tweet_text = process_container(t)
+            print(f'<{username} ({ts})>: {tweet_text}\n')
 
         time.sleep(2)
 
