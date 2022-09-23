@@ -1,6 +1,6 @@
-# tweet-scrapper
+# tweet-scraper
 
-Literally a tweet-scrapper
+Literally a tweet-scraper
 
 ## Usage
 
