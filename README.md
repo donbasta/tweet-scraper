@@ -35,4 +35,4 @@ using AJAX calls, so one call HTTP GET request at the beginning will not work.
 Instead, we need to simulate the loading process of the page like a browser, which can be done using selenium.
 
 The browser will scroll down periodically to load and scrape older tweets,
-and the script will try to find the HTNL elements corresponding to tweets, parse them, and output them to the console.
+and the script will try to find the HTML elements corresponding to tweets, parse them, and output them to the console.
