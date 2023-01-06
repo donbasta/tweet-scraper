@@ -1,8 +1,9 @@
 import argparse
-import scraper
 
 from dataclasses import dataclass
 from typing import Optional
+
+from src.scraper import run
 
 
 @dataclass
@@ -29,7 +30,7 @@ def options():
 def main():
     args = options()
     c = init(args)
-    scraper.run(c)
+    run(c)
 
 
 if __name__ == "__main__":

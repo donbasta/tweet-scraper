@@ -1,14 +1,16 @@
+import os
 import time
 
 from selenium import webdriver
-from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 from selenium.common.exceptions import StaleElementReferenceException
+from selenium.common.exceptions import NoSuchElementException
 
-from constants import *
+from .constants import *
+from .models import Tweet
 
 TWEET_HASHES = dict()
 
@@ -37,21 +39,14 @@ def login_twitter(browser, wait):
 
     email_input = wait.until(
         EC.visibility_of_element_located((By.NAME, "text")))
-    email_input.send_keys(TWITTER_LOGIN_EMAIL)
+    identifier = TWITTER_LOGIN_EMAIL if TWITTER_LOGIN_EMAIL is not None else TWITTER_LOGIN_USERNAME
+    email_input.send_keys(identifier)
 
     next_button = wait.until(EC.visibility_of_element_located(
         (By.XPATH, "//span[text()='Next']")))
     next_button.click()
 
     time.sleep(2)
-
-    uname_input = wait.until(
-        EC.visibility_of_element_located((By.NAME, "text")))
-    uname_input.send_keys(TWITTER_LOGIN_USERNAME)
-
-    next_button = wait.until(EC.visibility_of_element_located(
-        (By.XPATH, "//span[text()='Next']")))
-    next_button.click()
 
     password_input = wait.until(
         EC.visibility_of_element_located((By.NAME, "password")))
@@ -84,7 +79,7 @@ def search(browser, username):
     browser.get(url)
     time.sleep(2)
 
-    scroll_pause_time = 3
+    scroll_pause_time = 5
     screen_height = browser.execute_script("return window.screen.height;")
     i = 1
 
@@ -93,8 +88,7 @@ def search(browser, username):
             f"window.scrollTo(0, {screen_height}*{i});")
         i += 1
         time.sleep(scroll_pause_time)
-        scroll_height = browser.execute_script(
-            "return document.body.scrollHeight;")
+        #scroll_height = browser.execute_script("return document.body.scrollHeight;")
 
         tweet_containers = browser.find_elements(
             By.XPATH, TWEET_CONTAINER)
@@ -102,8 +96,12 @@ def search(browser, username):
         for t in tweet_containers:
             try:
                 # Getting the text (content) of the tweet
-                content = t.find_element(
-                    By.XPATH, ".//div[@data-testid='tweetText']")
+                try:
+                    content = t.find_element(
+                        By.XPATH, ".//div[@data-testid='tweetText']")
+                except NoSuchElementException as err:
+                    print(err)
+                    continue
                 tweet_content = process_container(content)
 
                 # Checking if parsed tweet is already processed and outputted to the console or not
@@ -111,30 +109,51 @@ def search(browser, username):
                 if h in TWEET_HASHES:
                     continue
 
-                TWEET_HASHES[h] = True
-
                 # Finding the username of the tweeter
-                user = t.find_element(
-                    By.XPATH, ".//div[@data-testid='User-Names']")
-                username_element = user.find_element(
-                    By.XPATH, ".//div[2]/div/div/a/div/span")
+                try:
+                    user = t.find_element(
+                        By.XPATH, ".//div[@data-testid='User-Names']")
+                    username_element = user.find_element(
+                        By.XPATH, ".//div[2]/div/div/a/div/span")
+                except NoSuchElementException as err:
+                    print(err)
+                    continue
                 uname = username_element.text
 
                 # Finding the time of the tweet
-                ts_element = t.find_element(
-                    By.XPATH, ".//div[2]/div/div[3]/a/time")
+                try:
+                    ts_element = t.find_element(
+                        By.XPATH, ".//div[2]/div/div[3]/a/time")
+                except NoSuchElementException as err:
+                    print(err)
+                    continue
                 ts = ts_element.text
 
-                # Outputting the formatted tweet to the console
-                print(f'<{uname} ({ts})>: {tweet_content}\n')
-                print(f"{len(TWEET_HASHES)} tweets scraped")
+                # Inserting the obtained tweet to the tweets dictionary with key hash of the text
+                twt = Tweet(uname, ts, tweet_content)
+                TWEET_HASHES[h] = twt
+
+                cur_tweet_hashed = len(TWEET_HASHES)
+                if cur_tweet_hashed % 10 == 0:
+                    print(f"{cur_tweet_hashed} tweets scrapped!")
+                
+                if cur_tweet_hashed % 50 == 0:
+                    with open(os.path.join(DATA_DIR, f"ckpt_{cur_tweet_hashed}.txt"), "w") as f:
+                        for _, twt in TWEET_HASHES.items():
+                            f.write(str(twt))
+                            f.write('\n')
 
             except StaleElementReferenceException as e:
                 print(e)
+                cur_tweet_hashed = len(TWEET_HASHES)
+                with open(os.path.join(DATA_DIR, f"ckpt_{cur_tweet_hashed}.txt"), "w") as f:
+                    for _, twt in TWEET_HASHES.items():
+                        f.write(str(twt))
+                        f.write('\n')
 
         # Finish scrolling if we reach the bottom of the page
-        if (screen_height) * i > scroll_height:
-            break
+        # if (screen_height) * i > scroll_height:
+        #    continue
 
 
 def run(config):
